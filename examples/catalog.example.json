@@ -1,0 +1,26 @@
+[
+  {
+    "topic_id": "project-performance-metric",
+    "label": "性能指标的测量口径",
+    "kind": "resume",
+    "domain": "project",
+    "project": "示例项目",
+    "source": "resume"
+  },
+  {
+    "topic_id": "architecture-tradeoff",
+    "label": "架构方案的取舍依据",
+    "kind": "document",
+    "domain": "architecture",
+    "project": "示例项目",
+    "source": "design-doc:architecture"
+  },
+  {
+    "topic_id": "database-range-lock",
+    "label": "数据库范围锁",
+    "kind": "document",
+    "domain": "database",
+    "project": "",
+    "source": "technical-note:transactions"
+  }
+]
