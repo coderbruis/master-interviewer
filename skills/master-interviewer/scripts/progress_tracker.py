@@ -15,6 +15,15 @@ from typing import Any
 
 PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,79}$")
 DEFAULT_STATE_DIR = Path.home() / ".codex" / "master-interviewer-state"
+STRATEGY_LABELS = {"deep": "深挖", "coverage": "查漏补缺"}
+STYLE_LABELS = {
+    "general": "通用",
+    "jd": "京东",
+    "alibaba": "阿里",
+    "bytedance": "字节",
+    "tencent": "腾讯",
+}
+TOP_MODE_LABELS = {"daily": "日常", "interviewer": "面试官"}
 
 
 def now_iso() -> str:
@@ -32,9 +41,19 @@ def load_state(path: Path) -> dict[str, Any]:
         raise SystemExit(f"state does not exist: {path}")
     with path.open("r", encoding="utf-8") as handle:
         state = json.load(handle)
+    ensure_config_fields(state)
     for topic in state.get("topics", []):
         ensure_review_fields(topic)
     return state
+
+
+def ensure_config_fields(state: dict[str, Any]) -> None:
+    """Add interview configuration lazily for profiles created by older versions."""
+    config = state.setdefault("interview_config", {})
+    config.setdefault("top_mode", "interviewer")
+    config.setdefault("strategy", "deep")
+    config.setdefault("company_style", "jd")
+    config.setdefault("updated_at", None)
 
 
 def ensure_review_fields(topic: dict[str, Any]) -> None:
@@ -178,14 +197,21 @@ def command_init(args: argparse.Namespace) -> None:
         state["target_role"] = args.role
     else:
         state = {
-            "schema_version": 1,
+            "schema_version": 2,
             "profile_id": args.profile,
             "candidate": args.candidate,
             "target_role": args.role,
             "created_at": now_iso(),
             "updated_at": now_iso(),
+            "interview_config": {
+                "top_mode": "interviewer",
+                "strategy": "deep",
+                "company_style": "jd",
+                "updated_at": now_iso(),
+            },
             "topics": [normalized_topic(topic) for topic in topics],
         }
+    state["schema_version"] = 2
     state["updated_at"] = now_iso()
     atomic_write(path, state)
     print(path)
@@ -208,6 +234,7 @@ def command_mark_asked(args: argparse.Namespace) -> None:
             "type": "question",
             "at": timestamp,
             "mode": args.mode,
+            "company_style": state["interview_config"]["company_style"],
             "summary": args.question,
             "review": is_review,
             "focus_level": topic["focus_level"],
@@ -216,6 +243,45 @@ def command_mark_asked(args: argparse.Namespace) -> None:
     state["updated_at"] = timestamp
     atomic_write(path, state)
     print(f"{topic['label']}\t{topic['interview_count']}")
+
+
+def command_set_config(args: argparse.Namespace) -> None:
+    path = state_path(args.profile, state_dir_from(args))
+    state = load_state(path)
+    if args.top_mode is None and args.strategy is None and args.style is None:
+        raise SystemExit("set-config requires --top-mode, --strategy, or --style")
+    config = state["interview_config"]
+    if args.top_mode is not None:
+        config["top_mode"] = args.top_mode
+    if args.strategy is not None:
+        config["strategy"] = args.strategy
+    if args.style is not None:
+        config["company_style"] = args.style
+    timestamp = now_iso()
+    config["updated_at"] = timestamp
+    state["updated_at"] = timestamp
+    atomic_write(path, state)
+    print_config(state)
+
+
+def print_config(state: dict[str, Any]) -> None:
+    config = state["interview_config"]
+    print(f"profile: {state['profile_id']}")
+    print(
+        f"current: {TOP_MODE_LABELS[config['top_mode']]}模式｜"
+        f"{STRATEGY_LABELS[config['strategy']]}模式｜"
+        f"{STYLE_LABELS[config['company_style']]}风格"
+    )
+    print(
+        "command: "
+        f"$master-interviewer {STYLE_LABELS[config['company_style']]}风格 "
+        f"{STRATEGY_LABELS[config['strategy']]}"
+    )
+
+
+def command_show_config(args: argparse.Namespace) -> None:
+    path = state_path(args.profile, state_dir_from(args))
+    print_config(load_state(path))
 
 
 def command_mark_followup(args: argparse.Namespace) -> None:
@@ -321,13 +387,16 @@ def command_report(args: argparse.Namespace) -> None:
     path = state_path(args.profile, state_dir_from(args))
     state = load_state(path)
     active = [topic for topic in state["topics"] if topic.get("active", True)]
+    if args.json:
+        print(json.dumps(state, ensure_ascii=False, indent=2))
+        return
+    print_config(state)
     if args.focus_only:
         focused = sorted(
             (topic for topic in active if topic["focus_level"] > 0),
             key=lambda topic: (-topic["focus_level"], topic["last_reviewed_at"] or ""),
         )
         labels = {3: "重点拷问", 2: "重点复习", 1: "持续观察"}
-        print(f"profile: {state['profile_id']}")
         print(f"focused: {len(focused)}")
         for topic in focused:
             print(
@@ -339,11 +408,7 @@ def command_report(args: argparse.Namespace) -> None:
             )
         return
     covered = [topic for topic in active if topic["interview_count"] > 0]
-    if args.json:
-        print(json.dumps(state, ensure_ascii=False, indent=2))
-        return
     percentage = 0 if not active else round(len(covered) * 100 / len(active), 1)
-    print(f"profile: {state['profile_id']}")
     print(f"coverage: {len(covered)}/{len(active)} ({percentage}%)")
     focus_counts = {
         level: sum(topic["focus_level"] == level for topic in active)
@@ -420,6 +485,12 @@ def command_dashboard(args: argparse.Namespace) -> None:
 
     print(f"# {state['candidate']}｜{state['target_role']}面试进度")
     print()
+    config = state["interview_config"]
+    print(
+        f"- 当前模式：{TOP_MODE_LABELS[config['top_mode']]}｜"
+        f"{STRATEGY_LABELS[config['strategy']]}｜"
+        f"{STYLE_LABELS[config['company_style']]}风格"
+    )
     print(f"- 更新时间：{state['updated_at']}")
     print(
         f"- 总体覆盖：`{progress_bar(len(covered), total)}` "
@@ -552,6 +623,17 @@ def build_parser() -> argparse.ArgumentParser:
     asked_parser.add_argument("--mode", choices=("deep", "coverage"), required=True)
     asked_parser.add_argument("--question", required=True)
     asked_parser.set_defaults(func=command_mark_asked)
+
+    config_parser = subparsers.add_parser("set-config")
+    config_parser.add_argument("--profile", required=True)
+    config_parser.add_argument("--top-mode", choices=tuple(TOP_MODE_LABELS))
+    config_parser.add_argument("--strategy", choices=tuple(STRATEGY_LABELS))
+    config_parser.add_argument("--style", choices=tuple(STYLE_LABELS))
+    config_parser.set_defaults(func=command_set_config)
+
+    show_config_parser = subparsers.add_parser("show-config")
+    show_config_parser.add_argument("--profile", required=True)
+    show_config_parser.set_defaults(func=command_show_config)
 
     followup_parser = subparsers.add_parser("mark-followup")
     followup_parser.add_argument("--profile", required=True)

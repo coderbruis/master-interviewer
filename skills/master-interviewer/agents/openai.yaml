@@ -1,4 +1,4 @@
 interface:
   display_name: "大师面试官"
-  short_description: "拷打项目与技术栈，精准诊断问题、讲透原理并持续追踪掌握度"
-  default_prompt: "使用 $master-interviewer 分析我的简历或学习资料，查找知识盲区，讲透原理并持续追踪掌握度。"
+  short_description: "支持京东、阿里、字节、腾讯风格，诊断问题并追踪掌握度"
+  default_prompt: "使用 $master-interviewer 当前模式，查看当前公司风格、面试策略和可用切换命令。"

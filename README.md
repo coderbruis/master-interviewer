@@ -8,6 +8,7 @@
 
 - **资料驱动**：从简历、项目、JD、学习文档和代码中生成知识点目录。
 - **自适应追问**：围绕回答中的真实缺口继续深挖，而不是随机背题。
+- **大厂风格**：支持京东、阿里、字节、腾讯和通用风格，并可与深挖、查漏策略组合。
 - **诊断与原理**：明确指出对错、遗漏和因果问题，并给出自包含参考答案。
 - **状态追踪**：记录覆盖度、掌握度、重点题和复习计划。
 - **隐私优先**：状态只保存必要元数据，不保存原始简历或文档正文。
@@ -54,6 +55,10 @@ Skill 每次只问一个原子问题。你直接回答即可，它会给出明�
 | 快捷指令 | 作用 |
 |---|---|
 | `$master-interviewer` | 显式启动 Skill；未指定策略时，根据当前资料和目标开始 |
+| `京东风格` / `阿里风格` / `字节风格` / `腾讯风格` | 切换公司面试风格，并保持当前策略 |
+| `阿里 深挖` / `字节 查漏` | 同时切换公司风格与面试策略 |
+| `当前模式` / `当前命令` | 查看当前顶层模式、策略、公司风格和可复现命令 |
+| `查看命令` / `风格列表` | 查看完整命令速查或全部公司风格 |
 | `查漏` / `广度扫描` / `高频题扫描` | 扩大覆盖面，优先发现未问和薄弱知识点 |
 | `深挖` / `项目深挖` / `技术栈深挖` | 围绕一个项目主张或技术点连续追问事实、决策、原理、边界和验证 |
 | `提示一下` | 只给当前题的最小必要提示，继续等待你作答 |
@@ -74,6 +79,8 @@ Skill 每次只问一个原子问题。你直接回答即可，它会给出明�
 查看进度，只展示还没覆盖和需要修正的知识点。
 错题复习，换一种问法，不要重复原题。
 ```
+
+公司名称表示可复用的模拟面试风格，不是对应公司的官方题库或录用标准。默认风格为京东，旧档案会自动获得兼容配置。风格和策略会随候选人档案持久化。
 
 ## 常见使用方式
 
@@ -115,6 +122,7 @@ skills/master-interviewer/
 ├── agents/openai.yaml
 ├── references/
 │   ├── grading-and-review.md
+│   ├── company-styles.md
 │   └── source-model.md
 └── scripts/progress_tracker.py
 ```
@@ -141,6 +149,18 @@ python3 skills/master-interviewer/scripts/progress_tracker.py \
 python3 skills/master-interviewer/scripts/progress_tracker.py \
   --state-dir /tmp/master-interviewer-demo \
   report --profile demo
+```
+
+切换并查看当前配置：
+
+```bash
+python3 skills/master-interviewer/scripts/progress_tracker.py \
+  --state-dir /tmp/master-interviewer-demo \
+  set-config --profile demo --top-mode interviewer --strategy deep --style alibaba
+
+python3 skills/master-interviewer/scripts/progress_tracker.py \
+  --state-dir /tmp/master-interviewer-demo \
+  show-config --profile demo
 ```
 
 开发和测试时建议总是传入临时的 `--state-dir`，避免与真实学习数据混合。
